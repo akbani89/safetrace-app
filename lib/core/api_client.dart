@@ -4,7 +4,7 @@ import 'package:dio/dio.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:http/http.dart' as http;
 import 'package:http_parser/http_parser.dart';
-import 'core/theme.dart';
+import 'theme.dart';
 
 class ApiClient {
   static final ApiClient _instance = ApiClient._internal();
