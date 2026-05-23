@@ -17,6 +17,12 @@ jobs:
           distribution: 'zulu'
           java-version: '17'
 
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install Android SDK platform 34
+        run: sdkmanager "platforms;android-34" "build-tools;34.0.0"
+
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
@@ -25,11 +31,4 @@ jobs:
       - name: Get dependencies
         run: flutter pub get
 
-      - name: Build APK
-        run: flutter build apk --release --target-platform android-arm64
-
-      - name: Upload APK
-        uses: actions/upload-artifact@v4
-        with:
-          name: safetrace-apk
-          path: build/app/outputs/flutter-apk/app-release.apk
+      - name:
