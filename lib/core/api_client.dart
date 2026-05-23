@@ -4,7 +4,7 @@ import 'package:dio/dio.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:http/http.dart' as http;
 import 'package:http_parser/http_parser.dart';
-import 'theme.dart';
+import 'package:safetrace/core/theme.dart';
 
 class ApiClient {
   static final ApiClient _instance = ApiClient._internal();
@@ -59,7 +59,8 @@ class ApiClient {
 
   Future<Map<String, dynamic>> getMe() async {
     final headers = await _authHeaders();
-    final response = await _dio.get('/identity/me', options: Options(headers: headers));
+    final response = await _dio.get('/identity/me',
+        options: Options(headers: headers));
     return response.data;
   }
 
@@ -81,13 +82,15 @@ class ApiClient {
 
   Future<List<dynamic>> getCases() async {
     final headers = await _authHeaders();
-    final response = await _dio.get('/cases/', options: Options(headers: headers));
+    final response =
+        await _dio.get('/cases/', options: Options(headers: headers));
     return response.data['cases'];
   }
 
   Future<Map<String, dynamic>> getCase(String caseId) async {
     final headers = await _authHeaders();
-    final response = await _dio.get('/cases/$caseId', options: Options(headers: headers));
+    final response = await _dio.get('/cases/$caseId',
+        options: Options(headers: headers));
     return response.data;
   }
 
@@ -121,8 +124,8 @@ class ApiClient {
     required String mimeType,
   }) async {
     final token = await _getToken();
-    final uri = Uri.parse('${AppConstants.baseUrl}/evidence/upload');
-
+    final uri =
+        Uri.parse('${AppConstants.baseUrl}/evidence/upload');
     final request = http.MultipartRequest('POST', uri);
     if (token != null) {
       request.headers['Authorization'] = 'Bearer $token';
@@ -133,7 +136,6 @@ class ApiClient {
       file.path,
       contentType: MediaType.parse(mimeType),
     ));
-
     final streamed = await request.send();
     final body = await streamed.stream.bytesToString();
     return jsonDecode(body);
@@ -152,7 +154,8 @@ class ApiClient {
 
   // ─── Chat ──────────────────────────────────────────────────────────────────
 
-  Future<List<dynamic>> getChatHistory(String caseId, String chatType) async {
+  Future<List<dynamic>> getChatHistory(
+      String caseId, String chatType) async {
     final headers = await _authHeaders();
     final response = await _dio.get(
       '/chat/history/$caseId',
