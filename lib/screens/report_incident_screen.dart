@@ -8,7 +8,8 @@ import '../core/api_client.dart';
 
 class ReportIncidentScreen extends StatefulWidget {
   final String? existingCaseId;
-  const ReportIncidentScreen({super.key, this.existingCaseId});
+  final String? existingCaseTitle;
+  const ReportIncidentScreen({super.key, this.existingCaseId, this.existingCaseTitle});
 
   @override
   State<ReportIncidentScreen> createState() => _ReportIncidentScreenState();
@@ -28,6 +29,7 @@ class _ReportIncidentScreenState extends State<ReportIncidentScreen> {
 
   final List<File> _attachments = [];
   final List<String> _attachmentTypes = [];
+  final List<String> _attachmentLabels = [];
 
   final List<Map<String, String>> _categories = [
     {'value': 'workplace', 'label': 'Workplace', 'emoji': '🏢'},
@@ -64,13 +66,105 @@ class _ReportIncidentScreenState extends State<ReportIncidentScreen> {
     });
   }
 
-  Future<void> _pickImage() async {
+  Future<void> _showMediaOptions() async {
+    await showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) => Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text('Add Evidence',
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+            const SizedBox(height: 6),
+            const Text(
+              'All files are encrypted before upload.',
+              style: TextStyle(color: AppColors.textSecondary, fontSize: 13),
+            ),
+            const SizedBox(height: 20),
+            _MediaOption(
+              icon: Icons.camera_alt_outlined,
+              title: 'Take Photo Now',
+              subtitle: 'Use your camera to capture evidence',
+              color: AppColors.primary,
+              onTap: () { Navigator.pop(ctx); _capturePhoto(); },
+            ),
+            const SizedBox(height: 10),
+            _MediaOption(
+              icon: Icons.videocam_outlined,
+              title: 'Record Video Now',
+              subtitle: 'Record a live video as evidence',
+              color: AppColors.accent,
+              onTap: () { Navigator.pop(ctx); _recordVideo(); },
+            ),
+            const SizedBox(height: 10),
+            _MediaOption(
+              icon: Icons.photo_library_outlined,
+              title: 'Choose from Gallery',
+              subtitle: 'Select existing photo or video',
+              color: AppColors.primaryLight,
+              onTap: () { Navigator.pop(ctx); _pickFromGallery(); },
+            ),
+            const SizedBox(height: 10),
+            _MediaOption(
+              icon: Icons.attach_file_outlined,
+              title: 'Attach File',
+              subtitle: 'PDF, document, or other file',
+              color: AppColors.warning,
+              onTap: () { Navigator.pop(ctx); _pickFile(); },
+            ),
+            const SizedBox(height: 16),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _capturePhoto() async {
     final picker = ImagePicker();
-    final xfile = await picker.pickImage(source: ImageSource.gallery);
+    final xfile = await picker.pickImage(
+      source: ImageSource.camera,
+      imageQuality: 85,
+    );
     if (xfile != null) {
       setState(() {
         _attachments.add(File(xfile.path));
         _attachmentTypes.add('image/jpeg');
+        _attachmentLabels.add('📷 Photo');
+      });
+    }
+  }
+
+  Future<void> _recordVideo() async {
+    final picker = ImagePicker();
+    final xfile = await picker.pickVideo(
+      source: ImageSource.camera,
+      maxDuration: const Duration(minutes: 5),
+    );
+    if (xfile != null) {
+      setState(() {
+        _attachments.add(File(xfile.path));
+        _attachmentTypes.add('video/mp4');
+        _attachmentLabels.add('🎥 Video');
+      });
+    }
+  }
+
+  Future<void> _pickFromGallery() async {
+    final picker = ImagePicker();
+    final xfile = await picker.pickMedia();
+    if (xfile != null) {
+      final isVideo = xfile.path.endsWith('.mp4') ||
+          xfile.path.endsWith('.mov') ||
+          xfile.path.endsWith('.avi');
+      setState(() {
+        _attachments.add(File(xfile.path));
+        _attachmentTypes.add(isVideo ? 'video/mp4' : 'image/jpeg');
+        _attachmentLabels.add(isVideo ? '🎥 Video' : '🖼️ Image');
       });
     }
   }
@@ -84,6 +178,7 @@ class _ReportIncidentScreenState extends State<ReportIncidentScreen> {
         _attachmentTypes.add(result.files.single.extension == 'pdf'
             ? 'application/pdf'
             : 'text/plain');
+        _attachmentLabels.add('📎 ${result.files.single.name}');
       });
     }
   }
@@ -93,7 +188,6 @@ class _ReportIncidentScreenState extends State<ReportIncidentScreen> {
     setState(() => _isLoading = true);
 
     try {
-      // Step 1: Create case if new
       if (_isNewCase) {
         final caseResult = await ApiClient().createCase(
           title: _caseTitleController.text.trim().isNotEmpty
@@ -104,7 +198,6 @@ class _ReportIncidentScreenState extends State<ReportIncidentScreen> {
         _caseId = caseResult['case_id'];
       }
 
-      // Step 2: Add incident
       final incidentResult = await ApiClient().addIncident(
         caseId: _caseId!,
         description: _descController.text.trim(),
@@ -116,18 +209,20 @@ class _ReportIncidentScreenState extends State<ReportIncidentScreen> {
 
       final incidentId = incidentResult['incident_id'];
 
-      // Step 3: Upload evidence
       for (int i = 0; i < _attachments.length; i++) {
-        await ApiClient().uploadEvidence(
-          incidentId: incidentId,
-          file: _attachments[i],
-          mimeType: _attachmentTypes[i],
-        );
+        try {
+          await ApiClient().uploadEvidence(
+            incidentId: incidentId,
+            file: _attachments[i],
+            mimeType: _attachmentTypes[i],
+          );
+        } catch (_) {
+          // Continue even if one file fails
+        }
       }
 
       if (!mounted) return;
 
-      // Show success
       await showDialog(
         context: context,
         builder: (ctx) => AlertDialog(
@@ -144,7 +239,7 @@ class _ReportIncidentScreenState extends State<ReportIncidentScreen> {
               Text('Case ID: $_caseId',
                   style: const TextStyle(fontFamily: 'monospace', fontSize: 13)),
               const SizedBox(height: 8),
-              Text('Evidence files uploaded: ${_attachments.length}'),
+              Text('Evidence files: ${_attachments.length}'),
               const SizedBox(height: 12),
               const Text(
                 'Your incident has been stored securely. Nothing has been shared with anyone.',
@@ -176,13 +271,50 @@ class _ReportIncidentScreenState extends State<ReportIncidentScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Report Incident')),
+      appBar: AppBar(
+        title: Text(widget.existingCaseId != null ? 'Add Incident' : 'Report Incident'),
+      ),
       body: Form(
         key: _formKey,
         child: ListView(
           padding: const EdgeInsets.all(20),
           children: [
-            // New or existing case
+            // Existing case banner
+            if (!_isNewCase && widget.existingCaseTitle != null) ...[
+              Container(
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  color: AppColors.primary.withOpacity(0.07),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: AppColors.primary.withOpacity(0.2)),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(Icons.folder_outlined, color: AppColors.primary, size: 18),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text('Adding to existing case',
+                              style: TextStyle(fontSize: 11, color: AppColors.primary)),
+                          Text(
+                            widget.existingCaseTitle!,
+                            style: const TextStyle(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 14,
+                              color: AppColors.primary,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 20),
+            ],
+
             if (_isNewCase) ...[
               _SectionLabel('Case Information'),
               TextFormField(
@@ -194,8 +326,6 @@ class _ReportIncidentScreenState extends State<ReportIncidentScreen> {
                 ),
               ),
               const SizedBox(height: 16),
-
-              // Category
               _SectionLabel('Category'),
               Wrap(
                 spacing: 8,
@@ -206,14 +336,11 @@ class _ReportIncidentScreenState extends State<ReportIncidentScreen> {
                   onSelected: (_) => setState(() => _category = cat['value']!),
                 )).toList(),
               ),
-
               const SizedBox(height: 20),
             ],
 
-            // Incident details
             _SectionLabel('Incident Details'),
 
-            // Date/Time
             GestureDetector(
               onTap: _pickDateTime,
               child: Container(
@@ -245,7 +372,6 @@ class _ReportIncidentScreenState extends State<ReportIncidentScreen> {
 
             const SizedBox(height: 14),
 
-            // Description
             TextFormField(
               controller: _descController,
               maxLines: 5,
@@ -255,12 +381,13 @@ class _ReportIncidentScreenState extends State<ReportIncidentScreen> {
                 alignLabelWithHint: true,
               ),
               validator: (v) =>
-                  v == null || v.trim().length < 10 ? 'Please describe the incident (min 10 chars)' : null,
+                  v == null || v.trim().length < 10
+                      ? 'Please describe the incident (min 10 chars)'
+                      : null,
             ),
 
             const SizedBox(height: 14),
 
-            // Location
             TextFormField(
               controller: _locationController,
               decoration: const InputDecoration(
@@ -272,7 +399,6 @@ class _ReportIncidentScreenState extends State<ReportIncidentScreen> {
 
             const SizedBox(height: 24),
 
-            // Evidence
             _SectionLabel('Evidence (optional)'),
             const Text(
               'All files are encrypted before upload. Only you can access them.',
@@ -280,47 +406,86 @@ class _ReportIncidentScreenState extends State<ReportIncidentScreen> {
             ),
             const SizedBox(height: 12),
 
-            Row(
-              children: [
-                _EvidenceButton(
-                  icon: Icons.image_outlined,
-                  label: 'Image',
-                  onTap: _pickImage,
+            // Single evidence button
+            GestureDetector(
+              onTap: _showMediaOptions,
+              child: Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: AppColors.primary.withOpacity(0.3),
+                    style: BorderStyle.solid,
+                  ),
                 ),
-                const SizedBox(width: 10),
-                _EvidenceButton(
-                  icon: Icons.attach_file,
-                  label: 'File',
-                  onTap: _pickFile,
+                child: const Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(Icons.add_circle_outline, color: AppColors.primary),
+                    SizedBox(width: 10),
+                    Text(
+                      'Add Evidence',
+                      style: TextStyle(
+                        color: AppColors.primary,
+                        fontWeight: FontWeight.w600,
+                        fontSize: 15,
+                      ),
+                    ),
+                    SizedBox(width: 8),
+                    Text(
+                      '(photo, video, file)',
+                      style: TextStyle(
+                        color: AppColors.textSecondary,
+                        fontSize: 12,
+                      ),
+                    ),
+                  ],
                 ),
-              ],
+              ),
             ),
 
             if (_attachments.isNotEmpty) ...[
               const SizedBox(height: 12),
-              ..._attachments.asMap().entries.map((entry) => ListTile(
-                contentPadding: EdgeInsets.zero,
-                leading: const Icon(Icons.insert_drive_file, color: AppColors.accent),
-                title: Text(
-                  entry.value.path.split('/').last,
-                  style: const TextStyle(fontSize: 13),
-                  overflow: TextOverflow.ellipsis,
+              ..._attachments.asMap().entries.map((entry) => Container(
+                margin: const EdgeInsets.only(bottom: 8),
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                decoration: BoxDecoration(
+                  color: AppColors.success.withOpacity(0.06),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: AppColors.success.withOpacity(0.2)),
                 ),
-                trailing: IconButton(
-                  icon: const Icon(Icons.close, color: AppColors.alert, size: 18),
-                  onPressed: () {
-                    setState(() {
-                      _attachments.removeAt(entry.key);
-                      _attachmentTypes.removeAt(entry.key);
-                    });
-                  },
+                child: Row(
+                  children: [
+                    Text(
+                      _attachmentLabels[entry.key],
+                      style: const TextStyle(fontSize: 13),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        entry.value.path.split('/').last,
+                        style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.close, color: AppColors.alert, size: 18),
+                      onPressed: () {
+                        setState(() {
+                          _attachments.removeAt(entry.key);
+                          _attachmentTypes.removeAt(entry.key);
+                          _attachmentLabels.removeAt(entry.key);
+                        });
+                      },
+                    ),
+                  ],
                 ),
               )),
             ],
 
             const SizedBox(height: 32),
 
-            // Privacy reminder
             Container(
               padding: const EdgeInsets.all(14),
               decoration: BoxDecoration(
@@ -384,29 +549,57 @@ class _SectionLabel extends StatelessWidget {
       );
 }
 
-class _EvidenceButton extends StatelessWidget {
+class _MediaOption extends StatelessWidget {
   final IconData icon;
-  final String label;
+  final String title;
+  final String subtitle;
+  final Color color;
   final VoidCallback onTap;
-  const _EvidenceButton({required this.icon, required this.label, required this.onTap});
+
+  const _MediaOption({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+    required this.color,
+    required this.onTap,
+  });
 
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        padding: const EdgeInsets.all(14),
         decoration: BoxDecoration(
-          border: Border.all(color: AppColors.divider),
-          borderRadius: BorderRadius.circular(10),
-          color: Colors.white,
+          color: color.withOpacity(0.06),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: color.withOpacity(0.2)),
         ),
         child: Row(
-          mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(icon, size: 18, color: AppColors.primary),
-            const SizedBox(width: 6),
-            Text(label, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500)),
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: color.withOpacity(0.12),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Icon(icon, color: color, size: 22),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(title,
+                      style: TextStyle(
+                          fontWeight: FontWeight.w600, fontSize: 14, color: color)),
+                  Text(subtitle,
+                      style: const TextStyle(
+                          fontSize: 12, color: AppColors.textSecondary)),
+                ],
+              ),
+            ),
+            Icon(Icons.chevron_right, color: color.withOpacity(0.5)),
           ],
         ),
       ),
