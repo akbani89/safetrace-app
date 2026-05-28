@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "39668927919",
+    "project_id": "safetrace-d31d4",
+    "storage_bucket": "safetrace-d31d4.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:39668927919:android:eeda060cb025ea67eb335a",
+        "android_client_info": {
+          "package_name": "com.example.safetrace_fresh"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCI15KL0wAYFhx8KptNbleP454XE7wU3OU"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
